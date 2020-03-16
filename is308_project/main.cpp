@@ -1,5 +1,5 @@
-//#define CLIENT
-#define SERVER
+#define CLIENT
+//#define SERVER
 #include <iostream>
 #include <chrono>
 #include <string>
@@ -17,16 +17,19 @@ void showHelp() {
 #ifdef CLIENT
 	cout << "client [-h|--help|/?] [-d|D] [-p port] ip msg" << endl
 		<< "  -h, --help, /?    Show this help." << endl
-		<< "  -d, -D            Show the detail of the transmission. -D will show more detail." << endl
+		<< "  -d, -D            Show the detail of the transmission." << endl
+		<< "                        -D will show more detail." << endl
 		<< "  -p port           Specifies target port. Default 12308." << endl
-		<< "  ip                Specifies target host ip." << endl
+		<< "  ip                Specifies target host IP." << endl
 		<< "  msg               Message you want to send." << endl;
 #endif
 #ifdef SERVER
 	cout << "server [-h|--help|/?] [-d|D] [port]" << endl
 		<< "  -h, --help, /?    Show this help." << endl
-		<< "  -d, -D            Show the detail of the transmission. -D will show more detail." << endl
-		<< "  port              The port you want the server to listen on, default listen on 12308." << endl;
+		<< "  -d, -D            Show the detail of the transmission." << endl
+		<< "                        -D will show more detail." << endl
+		<< "  port              The port you want the server to listen on," << endl
+		<< "                        default listen on 12308." << endl;
 #endif
 }
 
@@ -37,7 +40,7 @@ int showDetail = 0;
 typedef struct {
 	uint32_t version;
 	uint8_t charset[12];
-} pro_t;
+} pro_h;
 #pragma pack (pop)
 
 int main(int argi, char** argv) {
@@ -104,26 +107,26 @@ int main(int argi, char** argv) {
 	}
 
 	//ÉèÖÃNpcap DLLÂ·¾¶
-	if (!LoadNpcapDlls()) {
+	if (!loadNpcapDlls()) {
 		cout << " [*]Npcap load faild." << endl;
 		return -1;
 	}
 
 #ifdef CLIENT
 	if (selectIFFromIP(ip) == false) {
-		cout << " [!]Connot find a nic to sand the packet!" << endl;
+		cout << " [!]Connot find a NIC to sand the packet!" << endl;
 		return -2;
 	}
 	cout << " [-]" << ip2s(getIPAddr()) << ":" << port << " -> " << ip2s(ip) << ":" << port << endl;
 	cout << " [-]Sending msg: \"" << msg << "\"..." << endl;
 
-	size_t dataLen = sizeof(pro_t) + msg.size() + 1;
-	pro_t* p = (pro_t*)malloc(dataLen);
+	size_t dataLen = sizeof(pro_h) + msg.size() + 1;
+	pro_h* p = (pro_h*)malloc(dataLen);
 	p->version = 1;
 	memcpy(p->charset, "ASNI", 5);
-	memcpy(((uint8_t*)p) + sizeof(pro_t), msg.c_str(), msg.size() + 1);
+	memcpy(((uint8_t*)p) + sizeof(pro_h), msg.c_str(), msg.size() + 1);
 
-	int r = send_tcp_packet(ip, port, p, dataLen);
+	int r = sendTcpPacket(ip, port, p, dataLen);
 	switch (r) {
 	case -1:
 		printf(" [!]Send Fail!\n");
@@ -149,8 +152,8 @@ int main(int argi, char** argv) {
 	}
 	u_char* data;
 	// rt >=0 data len    -1 non mem
-	auto len = wait_tcp_packet(port, data);
-	pro_t* p = (pro_t*)data;
+	auto len = waitTcpPacket(port, data);
+	pro_h* p = (pro_h*)data;
 	switch (len) {
 	case -1:
 		printf(" [!]Not enough memory.\n");
@@ -160,10 +163,10 @@ int main(int argi, char** argv) {
 			printf(" [!] Send fail: Unknown reason! You can use the -d option to debug.\n");
 		else {
 			printf(" [+]Success.\n");
-			cout << endl << "Receivd a msg, len: " << len - sizeof(pro_t) << endl
+			cout << endl << "Receivd a msg, len: " << len - sizeof(pro_h) << endl
 				<< "Protocol version: v" << p->version << endl
 				<< "Encoding: " << p->charset << endl
-				<< "content: " << data + sizeof(pro_t) << endl;
+				<< "content: " << data + sizeof(pro_h) << endl;
 			delete[] data;
 		}
 		break;

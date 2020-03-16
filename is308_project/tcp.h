@@ -23,6 +23,7 @@ typedef struct {
 } socket_t;
 
 // A TCP connection states machine structure.
+// Transmission Control Block (TCB)
 typedef struct {
 	int state; // The state of the connection.
 	socket_t socket; // The socket used in the connection.
@@ -65,10 +66,10 @@ typedef struct {
 	uint16_t tcp_win_size;	// Window size.
 	uint16_t tcp_chk;		// TCP checksum.
 	uint16_t tcp_urg_ptr;	// Urgent pointer.
-} tcp_t;
+} tcp_h;
 #pragma pack (pop)
 
-uint16_t tcp_checksum(const void* buff, size_t len, in_addr_t src_addr, in_addr_t dest_addr);
-int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t len);
-void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst);
-int wait_tcp_packet(uint16_t port_to, u_char*& data);
+uint16_t tcpChecksum(const void* buff, size_t len, in_addr_t src_addr, in_addr_t dest_addr);
+int sendTcpPacket(in_addr_t ip_to, uint16_t port_to, const void* data, size_t len);
+void toTcpLayer(tcp_h* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst);
+int waitTcpPacket(uint16_t port_to, u_char*& data);

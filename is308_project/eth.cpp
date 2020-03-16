@@ -8,12 +8,12 @@
 
 extern int showDetail;
 
-bool mac_addr_cmp(uint8_t* m1, uint8_t* m2) {
+bool macAddrCmp(uint8_t* m1, uint8_t* m2) {
 	return  memcmp(m1, m2, ETH_ADDR_LEN) == 0;
 }
 
 unsigned ethCount = 0;
-inline void dump_eth_packet(ethernet_t* packet, size_t len) {
+inline void dumpEthPacket(ethernet_t* packet, size_t len) {
 	printf("ETH packet received: %zu(%zu) bytes (%u)\n", len - ETH_HEAD_LEN, len, ethCount);
 	printf("   MAC DEST   = %02x:%02x:%02x:%02x:%02x:%02x\n",
 		packet->dst[0], packet->dst[1], packet->dst[2],
@@ -28,20 +28,20 @@ inline void dump_eth_packet(ethernet_t* packet, size_t len) {
 void toEthLayer(const unsigned char* packet, size_t len) {
 	++ethCount;
 	ethernet_t* eh = (ethernet_t*)packet;
-	if (!mac_addr_cmp(eh->dst, getMacAddr()))
+	if (!macAddrCmp(eh->dst, getMacAddr()))
 		return;
 	switch (ntohs(eh->type)) {
 	case ETH_FRAME_IP:
 #ifdef DEBUG
-		dump_eth_packet(eh, len);
+		dumpEthPacket(eh, len);
 #endif
-		to_ip_layer((ip_t*)eh->data);
+		toIpLayer((ip_h*)eh->data);
 		break;
 	case ETH_FRAME_ARP:
 #ifdef DEBUG
-		dump_eth_packet(eh, len);
+		dumpEthPacket(eh, len);
 #endif
-		to_arp_layer((arp_t*)eh->data);
+		toArpLayer((arp_h*)eh->data);
 		break;
 	default: break;
 	}
@@ -50,7 +50,7 @@ void toEthLayer(const unsigned char* packet, size_t len) {
 // Send an ethernet packet to the physiscal layer.
 int sendEthPacket(const uint8_t* dstMac, const void* data, size_t len, uint16_t type) {
 	uint8_t* packet;
-	uint8_t* mac_addr;
+	uint8_t* macAddr;
 
 	// Analyze the packet length (must be less than ETH_MTU)	//
 	// TODO: if the packet length if great than ETH_MTU		//
@@ -62,13 +62,13 @@ int sendEthPacket(const uint8_t* dstMac, const void* data, size_t len, uint16_t 
 		return (-ENOMEM);
 
 	// Get the local mac address
-	if ((mac_addr = getMacAddr()) == NULL)
+	if ((macAddr = getMacAddr()) == NULL)
 		// No such device or address!
 		return (-ENXIO);
 
 	// Add the ethernet header to the packet
 	memcpy(packet, dstMac, ETH_ADDR_LEN);
-	memcpy(packet + ETH_ADDR_LEN, mac_addr, ETH_ADDR_LEN);
+	memcpy(packet + ETH_ADDR_LEN, macAddr, ETH_ADDR_LEN);
 	memcpy(packet + 2 * ETH_ADDR_LEN, &type, sizeof(uint16_t));
 
 	// Copy the data into the packet
@@ -87,7 +87,7 @@ int sendEthPacket(const uint8_t* dstMac, const void* data, size_t len, uint16_t 
 		printf(" [-] Send ETH packet.\n");
 	}
 	if (showDetail == 2) {
-		dump_eth_packet((ethernet_t*)packet, len);
+		dumpEthPacket((ethernet_t*)packet, len);
 	}
 
 	// Go to the physical layer

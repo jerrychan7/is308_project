@@ -14,7 +14,7 @@ uint32_t getNetmaskAddr();
 uint32_t getBroadcastAddr();
 
 // Set Npcap's DLL file path and configure DLL lazy loading.
-bool LoadNpcapDlls();
+bool loadNpcapDlls();
 
 // Initialize the network interface.
 bool showAndSelectIF();

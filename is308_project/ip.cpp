@@ -14,11 +14,13 @@ extern int showDetail;
 // p1 buf The IP header content.
 // p2 hdr_len The IP header length.
 // rt The result of the checksum.
-uint16_t ip_checksum(const void* buf, size_t hdr_len) {
+uint16_t ipChecksum(const void* buf, size_t hdr_len) {
 	unsigned long sum = 0;
 	const uint16_t* ip1 = (uint16_t*)buf;
 	while (hdr_len > 1) {
 		sum += *ip1++;
+		// 0xFFFF * 10 = 0x9FFF6 < 0x80000000
+		// Just to prevent unknown errors, such as strange hdr_len values.
 		if (sum & 0x80000000)
 			sum = (sum & 0xFFFF) + (sum >> 16);
 		hdr_len -= 2;
@@ -33,7 +35,7 @@ uint16_t ip_checksum(const void* buf, size_t hdr_len) {
 // Dump an IP packet to the standard output.
 // p1 packet The IP packet.
 // p2 showData Do you want to display package details in hexadecimal (if len != 0)
-void dump_ip_packet(ip_t* packet, bool showData = false) {
+void dumpIpPacket(ip_h* packet, bool showData = false) {
 	// Dump the IP header
 	printf(
 		"IP layer received: %zu(%u) bytes"
@@ -70,9 +72,9 @@ void dump_ip_packet(ip_t* packet, bool showData = false) {
 
 // Process an IP packet received from the ethernet layer.
 // p1 packet The IP packet.
-void to_ip_layer(ip_t* packet) {
+void toIpLayer(ip_h* packet) {
 	// Calculate the header checksum
-	uint16_t chk = ip_checksum(packet, packet->ip_hdr_len * sizeof(uint32_t));
+	uint16_t chk = ipChecksum(packet, packet->ip_hdr_len * sizeof(uint32_t));
 	if (chk) {
 		printf(" [!] IP header checksum error! %02x", chk);
 		return;
@@ -93,10 +95,10 @@ void to_ip_layer(ip_t* packet) {
 
 #ifdef DEBUG
 		// printf("IP layer received a packet from eth layer");
-		dump_ip_packet(packet);
+		dumpIpPacket(packet);
 #endif // DEBUG
-		to_tcp_layer(
-			(tcp_t*)((uint8_t*)packet + (packet->ip_hdr_len * sizeof(uint32_t))),
+		toTcpLayer(
+			(tcp_h*)((uint8_t*)packet + (packet->ip_hdr_len * sizeof(uint32_t))),
 			(ntohs(packet->ip_len) - (packet->ip_hdr_len * sizeof(uint32_t))),
 			packet->ip_src,
 			packet->ip_dst
@@ -108,11 +110,11 @@ void to_ip_layer(ip_t* packet) {
 	case IPPROTO_IGMP:
 		// UDP (User Datagram Protocol)
 	case IPPROTO_UDP:
-		//dump_ip_packet(packet);
+		//dumpIpPacket(packet);
 		//printf(" [!] UDP protocol not yet implemented!\n");
 		break;
 	default:
-		//dump_ip_packet(packet);
+		//dumpIpPacket(packet);
 		//printf("\nUnknown IP protocol!\n");
 		break;
 	}
@@ -126,22 +128,22 @@ void to_ip_layer(ip_t* packet) {
 // p5 proto The upper-layer protocol type.
 // rt >=0 The number of bytes sent in case of success; -#EMSGSIZE the packet is too big to be sent;
 //    -#ENOMEM cannot allocate the packet structure; -#ENETUNREACH destination address not found;
-int send_ip_packet(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, uint8_t proto) {
+int sendIpPacket(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, uint8_t proto) {
 	uint8_t eth_to[ETH_ADDR_LEN];
-	size_t packet_len = len + sizeof(ip_t);
-	ip_t* packet;
+	size_t packet_len = len + sizeof(ip_h);
+	ip_h* packet;
 	int tot_len;
 
 	if (packet_len > IP_FRAME_LEN)
 		return(-EMSGSIZE);
 
-	packet = (ip_t*)malloc(packet_len);
+	packet = (ip_h*)malloc(packet_len);
 	if (packet == NULL) return(-ENOMEM);
-	memset(packet, 0, sizeof(ip_t));
+	memset(packet, 0, sizeof(ip_h));
 
 	// Create the IP header
 	packet->ip_version = IP_V4;
-	packet->ip_hdr_len = sizeof(ip_t) / sizeof(uint32_t);
+	packet->ip_hdr_len = sizeof(ip_h) / sizeof(uint32_t);
 	packet->ip_tos = 0;
 	packet->ip_len = htons((u_short)packet_len);
 	packet->ip_id = htons(0xDEAD);	// :-)
@@ -151,7 +153,7 @@ int send_ip_packet(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, ui
 	packet->ip_chk = 0;
 	packet->ip_dst = ip_to;
 	packet->ip_src = getIPAddr();
-	packet->ip_chk = ip_checksum(packet, sizeof(ip_t));
+	packet->ip_chk = ipChecksum(packet, sizeof(ip_h));
 
 	// Copy the data into the packet
 	memcpy(packet + 1, data, len);
@@ -161,7 +163,7 @@ int send_ip_packet(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, ui
 	if (showDetail) {
 		printf(" [-] IP: Geting MAC address...\n");
 	}
-	if (!arp_ip_to_mac(ip_to, eth_to)) {
+	if (!arpIP2MAC(ip_to, eth_to)) {
 		if (showDetail) {
 			printf(" [!] IP: Get MAC address fail!\n");
 		}
@@ -172,7 +174,7 @@ int send_ip_packet(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, ui
 		printf(" [-] IP: Get MAC address success. Send a IP packet!\n");
 	}
 	if (showDetail == 2) {
-		dump_ip_packet(packet);
+		dumpIpPacket(packet);
 	}
 	// Go to the ethernet layer...
 	tot_len = sendEthPacket(eth_to, packet, packet_len, htons(ETH_FRAME_IP));

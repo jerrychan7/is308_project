@@ -15,7 +15,7 @@
 extern int showDetail;
 
 // Set Npcap's DLL file path and configure DLL lazy loading.
-bool LoadNpcapDlls() {
+bool loadNpcapDlls() {
 	_TCHAR npcap_dir[512];
 	UINT len = GetSystemDirectory(npcap_dir, 480);
 	if (!len) {
@@ -240,6 +240,7 @@ bool selectIFFromIP(unsigned long ip) {
 					ipAddr = ((struct sockaddr_in*)a->addr)->sin_addr.s_addr;
 					netmaskAddr = ((struct sockaddr_in*)a->netmask)->sin_addr.s_addr;
 					broadcastAddr = ((struct sockaddr_in*)a->broadaddr)->sin_addr.s_addr;
+					// The mask determines which network interface to use.
 					if ((ip & netmaskAddr) == (ipAddr & netmaskAddr)) {
 						printf(" [-]Send the packet from the NIC: %s\n", d->name);
 						memcpy(macAddr, getSelfMac(d), 6);
@@ -251,6 +252,10 @@ bool selectIFFromIP(unsigned long ip) {
 		}
 		if (selectOption != -1) break;
 		num++;
+	}
+	if (selectOption == -1) {
+		printf(" [!]Cannot auto-select the network interface form IP address.\n");
+		return false;
 	}
 
 	if ((adhandle = pcap_open_live(d->name,	// name of the device

@@ -16,39 +16,31 @@ extern int showDetail;
 // p3 src_addr The IP source address (in network format).
 // p4 dest_addr The IP destination address (in network format).
 // rt The result of the checksum.
-uint16_t tcp_checksum(const void* buff, size_t len, in_addr_t src_addr, in_addr_t dest_addr) {
+uint16_t tcpChecksum(const void* buff, size_t len, in_addr_t src_addr, in_addr_t dest_addr) {
 	const uint16_t* buf = (uint16_t*)buff;
-	uint16_t* ip_src = (uint16_t*)&src_addr, * ip_dst = (uint16_t*)&dest_addr;
-	uint32_t sum;
+	uint16_t* ip_src = (uint16_t*)&src_addr,
+		    * ip_dst = (uint16_t*)&dest_addr;
+	uint32_t sum = 0;
 	size_t length = len;
-
-	// Calculate the sum						//
-	sum = 0;
+	// Calculate the sum
 	while (len > 1) {
 		sum += *buf++;
 		if (sum & 0x80000000)
 			sum = (sum & 0xFFFF) + (sum >> 16);
 		len -= 2;
 	}
-
-	if (len & 1)
-		// Add the padding if the packet lenght is odd		//
-		sum += *((uint8_t*)buf);
-
-	// Add the pseudo-header					//
-	sum += *(ip_src++);
-	sum += *ip_src;
-	sum += *(ip_dst++);
-	sum += *ip_dst;
+	// Add the padding if the packet lenght is odd
+	if (len & 1) sum += *((uint8_t*)buf);
+	// Add the pseudo-header
+	sum += *(ip_src++);    sum += *ip_src;
+	sum += *(ip_dst++);    sum += *ip_dst;
 	sum += htons(IPPROTO_TCP);
 	sum += htons((u_short)length);
-
-	// Add the carries						//
+	// Add the carries
 	while (sum >> 16)
 		sum = (sum & 0xFFFF) + (sum >> 16);
-
-	// Return the one's complement of sum				//
-	return ((uint16_t)(~sum));
+	// Return the one's complement of sum
+	return (uint16_t)(~sum);
 }
 
 #include <vector>
@@ -61,7 +53,7 @@ uint32_t getSeqNum() {
 }
 
 // Dump the TCP packet contents on the console.
-inline void dump_tcp_packet(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst, bool recv = true, bool showData = false) {
+inline void dumpTcpPacket(tcp_h* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst, bool recv = true, bool showData = false) {
 	printf(
 		"TCP packet %s: %zu(%zu) bytes"
 		"\n   sender  = %u.%u.%u.%u:%u"
@@ -108,7 +100,7 @@ inline void dump_tcp_packet(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr
 // p3 data The data you want to sand.
 // p4 len The size of the data.
 // rt -1 send fail -2 overtime -3 non memory -4 get RST
-int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t len) {
+int sendTcpPacket(in_addr_t ip_to, uint16_t port_to, const void* data, size_t len) {
 	tcp_state_t* tcp_conn = (tcp_state_t*)malloc(sizeof(tcp_state_t));
 	if (tcp_conn == NULL) return -3;
 	memset(tcp_conn, 0, sizeof(tcp_state_t));
@@ -120,8 +112,8 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 	tcp_conn->socket.port_dst = htons(port_to);
 
 
-	tcp_t* tcph = new tcp_t;
-	memset(tcph, 0, sizeof(tcp_t));
+	tcp_h* tcph = new tcp_h;
+	memset(tcph, 0, sizeof(tcp_h));
 	tcph->tcp_src = htons(port_to);
 	tcph->tcp_dst = htons(port_to);
 	tcph->tcp_seq_num = tcp_conn->seq_num = getSeqNum();
@@ -129,12 +121,12 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 	tcph->tcp_hdr_len = 5;
 	tcph->tcp_syn = 1;
 	tcph->tcp_win_size = 0xFFFF;
-	tcph->tcp_chk = tcp_checksum(tcph, sizeof(tcp_t), getIPAddr(), ip_to);
+	tcph->tcp_chk = tcpChecksum(tcph, sizeof(tcp_h), getIPAddr(), ip_to);
 
 	if (showDetail)
 		printf("\n [-] Send first handshake (SYN).\n");
 	if (showDetail == 2)
-		dump_tcp_packet(tcph, sizeof(tcp_t), getIPAddr(), ip_to, false, true);
+		dumpTcpPacket(tcph, sizeof(tcp_h), getIPAddr(), ip_to, false, true);
 
 	for (int i = 0, totalCount = 5; i <= totalCount; ++i) {
 		// overtime
@@ -153,7 +145,7 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 			return -2;
 		}
 		// send
-		if (send_ip_packet(ip_to, tcph, sizeof(tcp_t), 255, IPPROTO_TCP) > 0) {
+		if (sendIpPacket(ip_to, tcph, sizeof(tcp_h), 255, IPPROTO_TCP) > 0) {
 			tcp_mutex.lock();
 			tcpList.push_back(tcp_conn);
 			tcp_mutex.unlock();
@@ -190,9 +182,9 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 	if (showDetail)
 		printf(" [-] Sent TCP packet with data.\n");
 	delete tcph; tcph = NULL;
-	u_char* packet = new u_char[len + sizeof(tcp_t)];
-	memset(packet, 0, len + sizeof(tcp_t));
-	tcph = (tcp_t*)packet;
+	u_char* packet = new u_char[len + sizeof(tcp_h)];
+	memset(packet, 0, len + sizeof(tcp_h));
+	tcph = (tcp_h*)packet;
 	tcph->tcp_src = htons(port_to);
 	tcph->tcp_dst = htons(port_to);
 	tcph->tcp_seq_num = tcp_conn->seq_num;
@@ -202,12 +194,12 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 	tcph->tcp_ack = 1;
 	tcph->tcp_win_size = 0xFFFF;
 	tcph->tcp_chk = 0;
-	memcpy(packet + sizeof(tcp_t), data, len);
-	tcph->tcp_chk = tcp_checksum(tcph, len + sizeof(tcp_t), getIPAddr(), ip_to);
+	memcpy(packet + sizeof(tcp_h), data, len);
+	tcph->tcp_chk = tcpChecksum(tcph, len + sizeof(tcp_h), getIPAddr(), ip_to);
 	tcp_conn->len = (uint32_t)len;
 	if (showDetail == 2)
-		dump_tcp_packet((tcp_t*)packet, len + sizeof(tcp_t), getIPAddr(), ip_to, false, true);
-	while (send_ip_packet(ip_to, packet, len + sizeof(tcp_t), 255, IPPROTO_TCP) <= 0) {
+		dumpTcpPacket((tcp_h*)packet, len + sizeof(tcp_h), getIPAddr(), ip_to, false, true);
+	while (sendIpPacket(ip_to, packet, len + sizeof(tcp_h), 255, IPPROTO_TCP) <= 0) {
 		printf(" [!] send first packet fail! Try again.\n");
 	}
 	while (1) {
@@ -229,10 +221,10 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 	tcph->tcp_ack = 1;
 	tcph->tcp_fin = 1;
 	tcph->tcp_chk = 0;
-	tcph->tcp_chk = tcp_checksum(tcph, sizeof(tcp_t), getIPAddr(), ip_to);
+	tcph->tcp_chk = tcpChecksum(tcph, sizeof(tcp_h), getIPAddr(), ip_to);
 	if (showDetail == 2)
-		dump_tcp_packet((tcp_t*)packet, sizeof(tcp_t), getIPAddr(), ip_to, false, true);
-	while (send_ip_packet(ip_to, packet, sizeof(tcp_t), 255, IPPROTO_TCP) <= 0) {
+		dumpTcpPacket((tcp_h*)packet, sizeof(tcp_h), getIPAddr(), ip_to, false, true);
+	while (sendIpPacket(ip_to, packet, sizeof(tcp_h), 255, IPPROTO_TCP) <= 0) {
 		printf(" [!] Send FIN packet fail! Try again.\n");
 	}
 	if (showDetail)
@@ -265,7 +257,7 @@ int send_tcp_packet(in_addr_t ip_to, uint16_t port_to, const void* data, size_t 
 // p1 port_to The port server want to listen on.
 // p2 data The data get from TCP connection. Need delete[] after use.
 // rt >=0 data len    -1 non mem
-int wait_tcp_packet(uint16_t port_to, u_char*& data) {
+int waitTcpPacket(uint16_t port_to, u_char*& data) {
 	printf("\n [-] Waiting a tcp packet on port %u...\n", port_to);
 	port_to = htons(port_to);
 	tcp_state_t* tcp_conn = NULL;
@@ -344,10 +336,10 @@ int wait_tcp_packet(uint16_t port_to, u_char*& data) {
 
 // IP layer -> TCP layer. Process a TCP packet from the IP layer
 // ip_dst = self host ip
-void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst) {
+void toTcpLayer(tcp_h* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst) {
 	uint8_t* data_buf = ((uint8_t*)packet) +
 		(packet->tcp_hdr_len * sizeof(uint32_t));
-	uint16_t chk = tcp_checksum(packet, len, ip_src, ip_dst);
+	uint16_t chk = tcpChecksum(packet, len, ip_src, ip_dst);
 	if (chk) {
 		printf("\n [!] TCP checksum error! %04X", chk);
 		return;
@@ -355,7 +347,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 
 	tcp_mutex.lock();
 #ifdef DEBUG
-	dump_tcp_packet(packet, len, ip_src, ip_dst);
+	dumpTcpPacket(packet, len, ip_src, ip_dst);
 #endif
 
 	// find socket
@@ -384,19 +376,19 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		if (showDetail)
 			printf(" [!] Only one TCP connection is allowed! Send back a RST packet. ");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 
 		// Send an RST
 		packet->tcp_ack_num = htonl(ntohl(packet->tcp_seq_num) + (u_long)len - (u_long)(packet->tcp_hdr_len) * 4 + 1);
 		packet->tcp_seq_num = tcp_conn->seq_num;
 		packet->tcp_hdr_len = 5;
-		len = sizeof(tcp_t);
+		len = sizeof(tcp_h);
 		packet->tcp_ack = 1;
 		packet->tcp_rst = 1;
 		packet->tcp_syn = 0;
 		packet->tcp_chk = 0;
-		packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
-		send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP);
+		packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
+		sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP);
 
 		tcp_mutex.unlock();
 		return;
@@ -407,7 +399,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		if (showDetail)
 			printf(" [-] Received a TCP first handshake packet (SYN).\n");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 		// SYN received!
 		// Open a new connection using sockets
 
@@ -433,13 +425,13 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		packet->tcp_syn = 1;
 		packet->tcp_ack = 1;
 		packet->tcp_chk = 0;
-		packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
+		packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
 		if (showDetail)
 			printf(" [-] Respond a TCP second handshake packet (SYN + ACK).\n");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src, false);
+			dumpTcpPacket(packet, len, ip_dst, ip_src, false);
 
-		if (send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP) > 0) {
+		if (sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP) > 0) {
 			if (socketNotInList) tcpList.push_back(tcp_conn);
 		}
 
@@ -452,7 +444,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 			printf(" [!] Get a RST packet. Disconnect TCP connection.\n");
 		}
 		if (showDetail == 2) {
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 		}
 		// Free the TCP connection structure
 		for (auto it = tcpList.begin(); it != tcpList.end(); ++it) {
@@ -478,7 +470,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		if (showDetail)
 			printf(" [-] Get a FIN packet (FIN).\n");
 		if (showDetail == 2) {
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 		}
 
 		// FIN received!					//
@@ -494,18 +486,18 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		packet->tcp_ack_num = htonl(ntohl(packet->tcp_seq_num) + (u_long)len - (u_long)(packet->tcp_hdr_len) * 4 + 1);
 		packet->tcp_seq_num = tcp_conn->seq_num;
 		packet->tcp_hdr_len = 5;
-		len = sizeof(tcp_t);
+		len = sizeof(tcp_h);
 		packet->tcp_fin = 0;
 		packet->tcp_ack = 1;
 		packet->tcp_chk = 0;
-		packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
+		packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
 
 		if (showDetail)
 			printf(" [-] Send back a ACK respond.\n");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src, false);
+			dumpTcpPacket(packet, len, ip_dst, ip_src, false);
 
-		if (send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) {}
+		if (sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) {}
 
 		// if I'm server
 		if (tcp_conn->socket.ip_src == ip_src) {
@@ -514,14 +506,14 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 			packet->tcp_ack_num = htonl(ntohl(packet->tcp_seq_num) + (u_long)len - (u_long)(packet->tcp_hdr_len) * 4 + 1);
 			packet->tcp_seq_num = tcp_conn->seq_num;
 			packet->tcp_hdr_len = 5;
-			len = sizeof(tcp_t);
+			len = sizeof(tcp_h);
 			packet->tcp_fin = 1;
 			packet->tcp_ack = 1;
 			packet->tcp_chk = 0;
-			packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
+			packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
 			if (showDetail == 2)
-				dump_tcp_packet(packet, len, ip_dst, ip_src, false);
-			if (send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) {}
+				dumpTcpPacket(packet, len, ip_dst, ip_src, false);
+			if (sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) {}
 			// Go into the CLOSING state (wait for ACK)
 			tcp_conn->state = TCP_CLOSING;
 		}
@@ -547,7 +539,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		if (showDetail)
 			printf(" [-] Received a TCP third handshake packet (ACK).\n");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 		tcp_conn->state = TCP_ESTABLISHED;
 		if (showDetail)
 			printf(" [-] TCP connection established!\n");
@@ -555,7 +547,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		tcp_mutex.unlock();
 		return;
 	}
-	//dump_tcp_packet(packet, len, ip_src, ip_dst, true);
+	//dumpTcpPacket(packet, len, ip_src, ip_dst, true);
 	//putchar('\n');
 	//if (tcp_conn != NULL)
 	//	printf("%d:%d -> %d:%d = %d, least ack: %ld", tcp_conn->socket.ip_src, tcp_conn->socket.port_src,
@@ -571,7 +563,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		if (showDetail)
 			printf(" [-] Received a TCP second handshake packet (SYN + ACK).\n");
 		if (showDetail == 2) {
-			dump_tcp_packet(packet, len, ip_dst, ip_src);
+			dumpTcpPacket(packet, len, ip_dst, ip_src);
 		}
 		// Swap source and destination ports
 		packet->tcp_dst ^= packet->tcp_src;
@@ -584,18 +576,18 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 		packet->tcp_seq_num = tcp_conn->ack_num;
 		packet->tcp_ack_num = htonl(ntohl(tcp_conn->seq_num) + 1);
 		packet->tcp_hdr_len = 5;
-		len = sizeof(tcp_t);
+		len = sizeof(tcp_h);
 		packet->tcp_syn = 0;
 		packet->tcp_ack = 1;
 		packet->tcp_chk = 0;
-		packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
+		packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
 
 		if (showDetail)
 			printf(" [-] Respond third hanshake (ACK).\n");
 		if (showDetail == 2)
-			dump_tcp_packet(packet, len, ip_dst, ip_src, false);
+			dumpTcpPacket(packet, len, ip_dst, ip_src, false);
 
-		if (send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) { }
+		if (sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP) <= 0) { }
 		tcp_conn->seq_num = packet->tcp_seq_num;
 		tcp_conn->ack_num = packet->tcp_ack_num;
 
@@ -618,12 +610,12 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 				tcp_mutex.unlock();
 				if (showDetail) printf(" [-] Get a ACK echo.\n");
 				if (showDetail == 2)
-					dump_tcp_packet(packet, len, ip_dst, ip_src, true, true);
+					dumpTcpPacket(packet, len, ip_dst, ip_src, true, true);
 				return;
 			}
 			if (showDetail) printf(" [-] Get a ACK packet.\n");
 			if (showDetail == 2) {
-				dump_tcp_packet(packet, len, ip_dst, ip_src, true, true);
+				dumpTcpPacket(packet, len, ip_dst, ip_src, true, true);
 			}
 
 			if (tcp_conn->data != NULL) {
@@ -648,13 +640,13 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 			packet->tcp_seq_num = tcp_conn->ack_num;
 			packet->tcp_ack_num = htonl(ntohl(tcp_conn->seq_num) + tcp_conn->len);
 			packet->tcp_hdr_len = 5;
-			len = sizeof(tcp_t);
+			len = sizeof(tcp_h);
 			packet->tcp_ack = 1;
 			packet->tcp_chk = 0;
-			packet->tcp_chk = tcp_checksum(packet, len, ip_dst, ip_src);
+			packet->tcp_chk = tcpChecksum(packet, len, ip_dst, ip_src);
 			if (showDetail == 2)
-				dump_tcp_packet(packet, len, ip_dst, ip_src, false);
-			send_ip_packet(ip_src, packet, len, 255, IPPROTO_TCP);
+				dumpTcpPacket(packet, len, ip_dst, ip_src, false);
+			sendIpPacket(ip_src, packet, len, 255, IPPROTO_TCP);
 			tcp_conn->len = 0;
 			tcp_conn->seq_num = packet->tcp_seq_num;
 			tcp_conn->ack_num = packet->tcp_ack_num;
@@ -677,7 +669,7 @@ void to_tcp_layer(tcp_t* packet, size_t len, in_addr_t ip_src, in_addr_t ip_dst)
 			if (showDetail)
 				printf(" [-] Received the final waved packet echo, TCP connection closed!\n");
 			if (showDetail == 2)
-				dump_tcp_packet(packet, len, ip_dst, ip_src);
+				dumpTcpPacket(packet, len, ip_dst, ip_src);
 
 			tcp_mutex.unlock();
 			return;

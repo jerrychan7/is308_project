@@ -20,13 +20,13 @@ typedef struct {
 	uint32_t arp_ip_source;
 	uint8_t  arp_eth_dest[6];
 	uint32_t arp_ip_dest;
-} arp_t;
+} arp_h;
 #pragma pack (pop)
 
-bool arp_ip_to_mac(in_addr_t dst_ip, uint8_t* dst_mac);
-int  send_arp_packet(in_addr_t ip_to, const uint8_t* eth_to, uint16_t arp_op);
-void to_arp_layer(arp_t* packet);
+bool arpIP2MAC(in_addr_t dst_ip, uint8_t* dst_mac);
+int  sendArpPacket(in_addr_t ip_to, const uint8_t* eth_to, uint16_t arp_op);
+void toArpLayer(arp_h* packet);
 
-void arp_add_cache(in_addr_t ip, uint8_t* mac);
-void arp_remove_cache(in_addr_t ip);
-void arp_reset_cache();
+void arpAddCache(in_addr_t ip, uint8_t* mac);
+void arpRemoveCache(in_addr_t ip);
+void arpResetCache();

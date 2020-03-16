@@ -63,11 +63,11 @@ typedef struct {
 	uint16_t ip_chk;	// IP header checksum.
 	uint32_t ip_src;	// IP source address (in network format).
 	uint32_t ip_dst;	// IP destination address (in network format).
-} ip_t;
+} ip_h;
 #pragma pack (pop)
 
 // Calculate the IP header checksum.
-uint16_t ip_checksum(const void* buf, size_t hdr_len);
+uint16_t ipChecksum(const void* buf, size_t hdr_len);
 
-void to_ip_layer(ip_t* packet);
-int  send_ip_packet(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, uint8_t proto);
+void toIpLayer(ip_h* packet);
+int  sendIpPacket(uint32_t ip_to, const void* data, size_t len, uint8_t ttl, uint8_t proto);
